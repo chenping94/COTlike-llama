@@ -93,7 +93,7 @@ def generate_response(prompt):
     messages = [
         # {"role": "system", "content": SYSTEM_PROMPT + important_message},
         # {"role": "user", "content": "Here is my first query: " + prompt },
-        {"role": "system", "content": ""},
+        {"role": "system", "content": "You are professional."},
         {"role": "user", "content": SYSTEM_PROMPT + important_message + "Here is my first query: " + prompt },
         {"role": "assistant", "content": "Understood. I will now think step by step following the instructions, starting with decomposing the problem. I will provide my response in a single, well-formatted JSON object for each step."}
     ]
@@ -104,7 +104,7 @@ def generate_response(prompt):
 
     while True:
         start_time = time.time()
-        step_data, raw_content = make_api_call(messages, 300)
+        step_data, raw_content = make_api_call(messages, 500)
         end_time = time.time()
         thinking_time = end_time - start_time
         total_thinking_time += thinking_time
@@ -133,7 +133,7 @@ def generate_response(prompt):
     messages.append({"role": "user", "content": "Please provide the final answer based on your reasoning above. Remember to respond with a single, well-formatted JSON object."})
 
     start_time = time.time()
-    final_data, raw_content = make_api_call(messages, 200, is_final_answer=True)
+    final_data, raw_content = make_api_call(messages, 300, is_final_answer=True)
     end_time = time.time()
     thinking_time = end_time - start_time
     total_thinking_time += thinking_time
@@ -236,6 +236,48 @@ Example of a valid JSON response:
 {"title": "Initial Problem Analysis", "content": "To approach this problem effectively, I'll first break down the given information into key components. This involves identifying...[detailed explanation]... By structuring the problem this way, we can systematically address each aspect.", "next_action": "continue"}
 
 """
+
+RATER_PROMPT = '''
+As an expert critic and LLM reflector, your task is to analyze the step-by-step response of an expert in specified domain towards a query, identifying specific areas where the response may lack clarity, depth, or relevance, and providing constructive feedback.
+
+Focus on providing detailed and constructive feedback, highlighting shortcomings and offering actionable suggestions for improvement. Maintain a supportive tone that encourages growth and development.
+
+# Assessment Criteria
+
+- **Logical**: Does the reasoning steps logical? Do the values or evidences used are in accurate and logical manner? Have it considered all of Edge Case Consideration, Precision Consideration, Alternative Hypothesis or Approach Evaluation and Elimination?
+- **Clarity**: Does the response clearly convey information and ideas? Are there any ambiguous or confusing sections?
+- **Depth**: To what extent does the response explore the topic? Are complex ideas and edge cases fully developed and well-considered?
+- **Relevance**: How directly does the response address the prompt or topic? Are there any areas where the response deviates without purpose?
+- **Coherence**: Are the ideas and arguments presented in a logically consistent manner? Does the flow of information make sense?
+- **Accuracy**: Are the facts and data presented correct and up-to-date? Are sources of information trustworthy? How many confidence level would you rate?
+- **Usefulness**: Does the response offer unique insights or express ideas in an useful way, is the solution offered feasible to address the issues?
+
+# Output Format
+
+Produce a well-formatted JSON for each assessment criterion listed, offering detailed feedback. Recap the key strengths and areas for improvement.
+Use JSON with keys: 'title' (values: Clarity,Depth,Relevance,Coherence,Accuracy,Usefulness), 'comment', 'rating' (values: ranges from 0 to 1 in 2 decimal place, e.g. 0.15, 0.25, 0.30, ...)
+
+# Examples
+
+- **Input**: "Query: 'What is the fox in this picture doing?' Expert response: 'The quick brown fox jumps over the lazy dog. It is known that foxes are part of the Canidae family.'"
+
+{"title": "Logical", "comment": "During Step 1 Problem Decomposition ought to consider more than 3 distinct cases, and the values used are questionable. Provided on 19XX, the values is actually XX...", "rating": "0.55"}
+{"title": "Clarity", "comment": "The initial sentence is simple and clear, though simplistic. The subsequent sentence introduces a fact but lacks context linking it to the previous statement.", "rating": "0.65"}
+{"title": "Depth", "comment": "The response provides minimal exploration of foxes or the significance of the phrase introduced.", "rating": "0.50"}
+{"title": "Relevance", "comment": "While factual, the information on the Canidae family seems tangential to the core topic presented by the phrase.", "rating": "0.65"}
+{"title": "Coherence", "comment": "The transition between sentences could be smoother with a connective rationale.", "rating": "0.75"}
+{"title": "Accuracy", "comment": "The statement about foxes is factually accurate.", "rating": "0.95"}
+{"title": "Usefulness", "comment": "The response lacks usefulness, largely restating known information without unique insight (out of the box) that could really solve the issues.", "rating": "0.45"}
+
+**Recap**: The response is clear and accurate but fails to provide engaging or deeply explored content. Consider expanding the context and integrating creative links between ideas.
+
+# Notes
+
+- Encourage improvements by suggesting specific changes, like adding examples or contextual explanations.
+- Maintain a positive and encouraging tone throughout the feedback.
+- Address both strengths and weaknesses equally to provide balanced feedback.
+
+'''
 
 if __name__ == "__main__":
     main()
