@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import os
 import re
 import traceback
+from pymongo import MongoClient
 
 # Load environment variables
 load_dotenv()
@@ -13,6 +14,13 @@ load_dotenv()
 # Get configuration from .env file
 OLLAMA_URL = os.getenv('OLLAMA_URL', 'http://localhost:11434')
 OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama3.2')
+
+def get_mongo_client():
+    client = MongoClient("mongodb://localhost:27017/")  # Replace with your MongoDB connection string
+    return client
+
+def get_database(client, db_name):
+    return client[db_name]
 
 def check_for_follow_up(raw_content, step_data):
     if "Please let me know" in raw_content:
@@ -90,6 +98,9 @@ def make_api_call(messages, max_tokens, is_final_answer=False):
         time.sleep(1)  # Wait for 1 second before retrying
 
 def generate_response(prompt):
+    client = get_mongo_client()
+    db = get_database(client, "COTlike-llama")
+    collection = db["steps"]
     messages = [
         # {"role": "system", "content": SYSTEM_PROMPT + important_message},
         # {"role": "user", "content": "Here is my first query: " + prompt },
@@ -112,6 +123,9 @@ def generate_response(prompt):
         steps.append((f"Step {step_count}: {step_data['title']}", step_data['content'], thinking_time, raw_content))
 
         messages.append({"role": "assistant", "content": json.dumps(step_data)})
+
+        # Store each step in MongoDB
+        collection.insert_one(step_data)
 
         # Check if a follow-up is needed
         follow_up = check_for_follow_up(raw_content, step_data)
@@ -139,6 +153,9 @@ def generate_response(prompt):
     total_thinking_time += thinking_time
 
     steps.append(("Final Answer", final_data['content'], thinking_time, raw_content))
+
+    # Store the final answer in MongoDB
+    collection.insert_one(final_data)
 
     yield steps, total_thinking_time
 
