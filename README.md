@@ -11,6 +11,7 @@ Modified by me:
 
 #2 Added Non-relational DB (MongoDB) for storage of conversations
 
+#3 Prompt automation
 
 Future expansion plans:
 
