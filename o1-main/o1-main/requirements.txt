@@ -6,3 +6,7 @@ blessed
 openai
 swarm
 pymongo
+swarm @ git+https://github.com/openai/swarm.git
+pydantic
+packaging
+urllib3

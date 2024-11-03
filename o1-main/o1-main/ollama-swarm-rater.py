@@ -17,12 +17,19 @@ load_dotenv()
 # Get configuration from .env file
 OLLAMA_URL = os.getenv('OLLAMA_URL', 'http://localhost:11434')
 OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama3.2')
-AGENT_A_MODEL = os.getenv('LLM_MODEL', 'qwen2.5:coder-7b')
+AGENT_A_MODEL = os.getenv('LLM_MODEL', 'qwen2.5-coder:7b')
 
 ollama_client = OpenAI(
     base_url='http://localhost:11434/v1',
     api_key='ollama'
 )
+
+Oclient = Swarm(client=ollama_client)
+agentA = Agent(
+            name="Evaluation Agent",
+            instructions="You are an expert evaluator. Your task is to evaluate the step-by-step reasoning response towards the questions and provide an evaluation rating system from 0 to 1.",
+            model=AGENT_A_MODEL
+        )
 
 def get_mongo_client():
     client = MongoClient("mongodb://localhost:27017/")  # Replace with your MongoDB connection string
@@ -170,17 +177,15 @@ def generate_response(prompt):
     yield steps, total_thinking_time
 
     if final_answer_detected:
-        # Transfer conversation to agentA
-        agentA = Agent(
-            name="Evaluation Agent",
-            instructions="You are an expert evaluator. Your task is to evaluate the step-by-step reasoning response towards the questions and provide an evaluation rating system from 0 to 1.",
-            model=AGENT_A_MODEL
-        )
-        Oclient = Swarm(client=ollama_client)
-        response = Oclient.run(
-            agent=agentA,
-            messages=messages
-        )
+        # Transfer conversation to agentA for evaluation
+        # messages.append({"role": "assistant", "content": final_data['content']})
+        # messages.append({"role": "user", "content": "Please evaluate the final answer based on the original question and your reasoning steps. Provide a score out from 0 to 1 and a brief explanation."})
+
+        start_time = time.time()
+        response = Oclient.run(agent=agentA, messages=messages)
+        end_time = time.time()
+        thinking_time = end_time - start_time
+
         steps.append(("Evaluation Response", response.messages[-1]["content"], 0, response.messages[-1]["content"]))
         yield steps, total_thinking_time
 
@@ -190,15 +195,16 @@ def main():
     st.title("Chain-of-thoughts using llama3.2")
 
     st.markdown("""
+                
+                *Bing search "COTlike-llama" 
+                
     This is an early prototype of creating o1-like COT via prompt engineering to improve output accuracy. 
     
     It is powered by Ollama so that the reasoning step, model and data stored are local!
 
     Forked from [bklieger-groq](https://github.com/bklieger-groq) and [open-source](https://github.com/win4r/o1)
 
-    Modified by me [repository](https://github.com/chenping94/COTlike-llama) 
-    
-    *Bing search "COTlike-llama" 
+    Modified by me [repository](https://github.com/chenping94/COTlike-llama)   
     
     p/s: It is not perfect and accuracy has yet to be formally evaluated.
     """)
