@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import os
 import re
 import traceback
+import subprocess
 from pymongo import MongoClient
 
 # Load environment variables
@@ -112,6 +113,7 @@ def generate_response(prompt):
     steps = []
     step_count = 1
     total_thinking_time = 0
+    final_answer_detected = False
 
     while True:
         start_time = time.time()
@@ -125,7 +127,8 @@ def generate_response(prompt):
         messages.append({"role": "assistant", "content": json.dumps(step_data)})
 
         # Store each step in MongoDB
-        collection.insert_one(step_data)
+        # collection.insert_one(step_data)
+        # collection.insert_one({"steps": steps})
 
         # Check if a follow-up is needed
         follow_up = check_for_follow_up(raw_content, step_data)
@@ -136,6 +139,7 @@ def generate_response(prompt):
             continue  # Skip to the next iteration without incrementing step_count
 
         if step_data['next_action'] == 'final_answer':
+            final_answer_detected = True
             break
 
         step_count += 1
@@ -155,9 +159,12 @@ def generate_response(prompt):
     steps.append(("Final Answer", final_data['content'], thinking_time, raw_content))
 
     # Store the final answer in MongoDB
-    collection.insert_one(final_data)
+    # collection.insert_one(final_data)
+    collection.insert_one({"steps": steps})
 
     yield steps, total_thinking_time
+    # if final_answer_detected:
+    #     subprocess.run(["python", "ollama-rater.py"])
 
 def main():
     st.set_page_config(page_title="COTlike-llama", page_icon="🧠", layout="wide")
