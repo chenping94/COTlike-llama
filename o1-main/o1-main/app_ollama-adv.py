@@ -8,6 +8,7 @@ import re
 import traceback
 import subprocess
 from pymongo import MongoClient
+from swarm import Swarm, Agent
 
 # Load environment variables
 load_dotenv()
@@ -15,6 +16,7 @@ load_dotenv()
 # Get configuration from .env file
 OLLAMA_URL = os.getenv('OLLAMA_URL', 'http://localhost:11434')
 OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama3.2')
+AGENT_A_MODEL = os.getenv('AGENT_A_MODEL', 'qwen2.5:coder-7b')
 
 def get_mongo_client():
     client = MongoClient("mongodb://localhost:27017/")  # Replace with your MongoDB connection string
@@ -163,8 +165,21 @@ def generate_response(prompt):
     collection.insert_one({"steps": steps})
 
     yield steps, total_thinking_time
-    # if final_answer_detected:
-    #     subprocess.run(["python", "ollama-rater.py"])
+
+    if final_answer_detected:
+        # Transfer conversation to agentA
+        agentA = Agent(
+            name="Evaluation Agent",
+            instructions="You are an expert evaluator. Your task is to evaluate the step-by-step reasoning response towards the questions and provide an evaluation rating system from 0 to 1.",
+            model=AGENT_A_MODEL
+        )
+        client = Swarm(client=ollama_client)
+        response = client.run(
+            agent=agentA,
+            messages=messages
+        )
+        steps.append(("Evaluation Response", response.messages[-1]["content"], 0, response.messages[-1]["content"]))
+        yield steps, total_thinking_time
 
 def main():
     st.set_page_config(page_title="COTlike-llama", page_icon="🧠", layout="wide")
@@ -203,7 +218,7 @@ def main():
         for steps, total_thinking_time in generate_response(user_query):
             with response_container.container():
                 for i, (title, content, thinking_time, raw_content) in enumerate(steps):
-                    if title.startswith("Final Answer"):
+                    if title.startswith("Final Answer") or title.startswith("Evaluation Response"):
                         st.markdown(f"### {title}")
                         st.markdown(content.replace('\n', '<br>'), unsafe_allow_html=True)
                     else:
