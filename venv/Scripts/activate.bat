@@ -8,7 +8,7 @@ if defined _OLD_CODEPAGE (
     "%SystemRoot%\System32\chcp.com" 65001 > nul
 )
 
-set VIRTUAL_ENV=C:\Users\chenp\Dev\own\win4r-o1\COTlike-llama\venv
+set VIRTUAL_ENV=C:\Users\kim\dev\own\COTlike llama\COTlike-llama\venv
 
 if not defined PROMPT set PROMPT=$P$G
 
