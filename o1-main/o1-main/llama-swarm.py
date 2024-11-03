@@ -9,3 +9,4 @@ ollama_client = OpenAI(
 )
 
 
+client = Swarm(client=ollama_client)
