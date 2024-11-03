@@ -4,4 +4,5 @@ python-dotenv
 requests
 blessed
 openai
+swarm
 pymongo
