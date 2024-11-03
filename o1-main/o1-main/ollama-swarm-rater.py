@@ -9,6 +9,7 @@ import traceback
 import subprocess
 from pymongo import MongoClient
 from swarm import Swarm, Agent
+from openai import OpenAI
 
 # Load environment variables
 load_dotenv()
@@ -16,7 +17,12 @@ load_dotenv()
 # Get configuration from .env file
 OLLAMA_URL = os.getenv('OLLAMA_URL', 'http://localhost:11434')
 OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama3.2')
-AGENT_A_MODEL = os.getenv('AGENT_A_MODEL', 'qwen2.5:coder-7b')
+AGENT_A_MODEL = os.getenv('LLM_MODEL', 'qwen2.5:coder-7b')
+
+ollama_client = OpenAI(
+    base_url='http://localhost:11434/v1',
+    api_key='ollama'
+)
 
 def get_mongo_client():
     client = MongoClient("mongodb://localhost:27017/")  # Replace with your MongoDB connection string
@@ -41,9 +47,6 @@ def clean_json_string(json_string):
     # Remove any text before the first '{'
     json_string = re.sub(r'^[^{]*', '', json_string)
 
-
-
-    
     # Remove any text after the last '}'
     json_string = re.sub(r'[^}]*$', '', json_string)
     # Remove any trailing commas before closing braces or brackets
@@ -173,8 +176,8 @@ def generate_response(prompt):
             instructions="You are an expert evaluator. Your task is to evaluate the step-by-step reasoning response towards the questions and provide an evaluation rating system from 0 to 1.",
             model=AGENT_A_MODEL
         )
-        client = Swarm(client=ollama_client)
-        response = client.run(
+        Oclient = Swarm(client=ollama_client)
+        response = Oclient.run(
             agent=agentA,
             messages=messages
         )
@@ -182,7 +185,7 @@ def generate_response(prompt):
         yield steps, total_thinking_time
 
 def main():
-    st.set_page_config(page_title="COTlike-llama", page_icon="🧠", layout="wide")
+    st.set_page_config(page_title="COTlike-ollama-swarm", page_icon="🧠", layout="wide")
 
     st.title("Chain-of-thoughts using llama3.2")
 
