@@ -9,14 +9,23 @@ import traceback
 import subprocess
 from pymongo import MongoClient
 from swarm import Swarm, Agent
+from openai import OpenAI
 
 # Load environment variables
 load_dotenv()
 
 # Get configuration from .env file
 OLLAMA_URL = os.getenv('OLLAMA_URL', 'http://localhost:11434')
-OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama3.2')
+# OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama3.2')
 AGENT_A_MODEL = os.getenv('AGENT_A_MODEL', 'qwen2.5:coder-7b')
+OLLAMA_MODEL = os.getenv('AGENT_A_MODEL', 'qwen2.5:coder-7b')
+
+ollama_client = OpenAI(
+    base_url="http://localhost:11434/v1",        
+    api_key="ollama"            
+)
+
+max_tokens = 4096
 
 def get_mongo_client():
     client = MongoClient("mongodb://localhost:27017/")  # Replace with your MongoDB connection string
@@ -39,11 +48,7 @@ def extract_json_objects(text):
 
 def clean_json_string(json_string):
     # Remove any text before the first '{'
-    json_string = re.sub(r'^[^{]*', '', json_string)
-
-
-
-    
+    json_string = re.sub(r'^[^{]*', '', json_string)    
     # Remove any text after the last '}'
     json_string = re.sub(r'[^}]*$', '', json_string)
     # Remove any trailing commas before closing braces or brackets
@@ -107,8 +112,9 @@ def generate_response(prompt):
     messages = [
         # {"role": "system", "content": SYSTEM_PROMPT + important_message},
         # {"role": "user", "content": "Here is my first query: " + prompt },
-        {"role": "system", "content": "You are professional."},
-        {"role": "user", "content": SYSTEM_PROMPT + important_message + "Here is my first query: " + prompt },
+        {"role": "system", "content": NEW_PROMPT},
+        # {"role": "user", "content": SYSTEM_PROMPT + important_message + "Here is my first query: " + prompt },
+        {"role": "user", "content": "Here is my first query: " + prompt },
         {"role": "assistant", "content": "Understood. I will now think step by step following the instructions, starting with decomposing the problem. I will provide my response in a single, well-formatted JSON object for each step."}
     ]
 
@@ -119,7 +125,7 @@ def generate_response(prompt):
 
     while True:
         start_time = time.time()
-        step_data, raw_content = make_api_call(messages, 500)
+        step_data, raw_content = make_api_call(messages, max_tokens)
         end_time = time.time()
         thinking_time = end_time - start_time
         total_thinking_time += thinking_time
@@ -153,7 +159,7 @@ def generate_response(prompt):
     messages.append({"role": "user", "content": "Please provide the final answer based on your reasoning above. Remember to respond with a single, well-formatted JSON object."})
 
     start_time = time.time()
-    final_data, raw_content = make_api_call(messages, 300, is_final_answer=True)
+    final_data, raw_content = make_api_call(messages, max_tokens, is_final_answer=True)
     end_time = time.time()
     thinking_time = end_time - start_time
     total_thinking_time += thinking_time
@@ -173,11 +179,18 @@ def generate_response(prompt):
             instructions="You are an expert evaluator. Your task is to evaluate the step-by-step reasoning response towards the questions and provide an evaluation rating system from 0 to 1.",
             model=AGENT_A_MODEL
         )
-        client = Swarm(client=ollama_client)
-        response = client.run(
-            agent=agentA,
-            messages=messages
-        )
+        Oclient = Swarm(client=ollama_client)
+        try:
+            response = Oclient.chat.completions.create(
+                    model=OLLAMA_MODEL,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=0.2,
+                    response_format={"type": "json_object"}
+                )
+            return json.loads(response.choices[0].message.content)
+        except Exception as e:
+            time.sleep(1)
         steps.append(("Evaluation Response", response.messages[-1]["content"], 0, response.messages[-1]["content"]))
         yield steps, total_thinking_time
 
@@ -317,6 +330,41 @@ Use JSON with keys: 'title' (values: Clarity,Depth,Relevance,Coherence,Accuracy,
 - Address both strengths and weaknesses equally to provide balanced feedback.
 
 '''
+
+NEW_PROMPT = """
+You are an AI assistant that explains your reasoning step by step, incorporating dynamic Chain of Thought (CoT), reflection, and verbal reinforcement learning. Follow these instructions:
+
+1. Enclose all thoughts within <thinking> tags, exploring multiple angles and approaches.
+2. Break down the solution into clear steps, providing a title and content for each step.
+3. After each step, decide if you need another step or if you're ready to give the final answer.
+4. Continuously adjust your reasoning based on intermediate results and reflections, adapting your strategy as you progress.
+5. Regularly evaluate your progress, being critical and honest about your reasoning process.
+6. Assign a quality score between 0.0 and 1.0 to guide your approach:
+   - 0.8+: Continue current approach
+   - 0.5-0.7: Consider minor adjustments
+   - Below 0.5: Seriously consider backtracking and trying a different approach
+7. If unsure or if your score is low, backtrack and try a different approach, explaining your decision.
+8. For mathematical problems, show all work explicitly using LaTeX for formal notation and provide detailed proofs.
+9. Explore multiple solutions individually if possible, comparing approaches in your reflections.
+10. Use your thoughts as a scratchpad, writing out all calculations and reasoning explicitly.
+11. Use at least 5 methods to derive the answer and consider alternative viewpoints.
+12. Be aware of your limitations as an AI and what you can and cannot do.
+
+After every 3 steps, perform a detailed self-reflection on your reasoning so far, considering potential biases and alternative viewpoints.
+
+Respond in JSON format with 'title', 'content', 'next_action' (either 'continue', 'reflect', or 'final_answer'), and 'confidence' (a number between 0 and 1) keys.
+
+Example of a valid JSON response:
+{
+    "title": "Identifying Key Information",
+    "content": "To begin solving this problem, we need to carefully examine the given information and identify the crucial elements that will guide our solution process. This involves...",
+    "next_action": "continue",
+    "confidence": 0.8
+}
+
+Your goal is to demonstrate a thorough, adaptive, and self-reflective problem-solving process, emphasizing dynamic thinking and learning from your own reasoning.
+
+"""
 
 if __name__ == "__main__":
     main()
